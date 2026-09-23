@@ -5,8 +5,8 @@ A modern, high-performance **Product Admin Dashboard** built with **Next.js (App
 ---
 
 ## 🚀 Live Demo & Repository
-- **Live Demo**: [Deploy on Vercel / Netlify]
-- **GitHub Repository**: [Public Repository Link]
+- **Live Demo**: [https://product-admin-two.vercel.app/login](https://product-admin-two.vercel.app/login)
+- **GitHub Repository**: [https://github.com/shubhangi2326/ProductAdmin](https://github.com/shubhangi2326/ProductAdmin)
 
 ---
 
