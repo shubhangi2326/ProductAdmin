@@ -1,36 +1,125 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Product Admin Dashboard
 
-## Getting Started
+A modern, high-performance **Product Admin Dashboard** built with **Next.js (App Router)**, **React**, **Tailwind CSS**, and **Axios**, powered by the [DummyJSON API](https://dummyjson.com).
 
-First, run the development server:
+---
 
+## 🚀 Live Demo & Repository
+- **Live Demo**: [Deploy on Vercel / Netlify]
+- **GitHub Repository**: [Public Repository Link]
+
+---
+
+## 📋 Features Completed
+
+### 1. 🔐 Authentication & Protected Routes
+- **Login Page (`/login`)**: Authenticates using `POST https://dummyjson.com/auth/login` with credentials `emilys` / `emilyspass`.
+- **Error Feedback**: Displays clear inline error banners for wrong credentials.
+- **Route Guard**: Only authenticated users can access product dashboard (`/products`) and details (`/products/[id]`). Unauthenticated attempts automatically redirect to `/login`.
+- **Persistent Session**: Auth token stored securely in HTTP cookies (`js-cookie`) and `localStorage`, with auto-rehydration on reload.
+- **Logout Action**: Top navbar logout button clears token and session, redirecting to `/login`.
+- **Double-Submission Prevention**: Disables login button and shows a spinner during pending requests.
+
+### 2. 📊 Product List & Responsive Layout
+- Displays thumbnail image, product title, category badge, price ($), star rating, and stock status.
+- **Responsive Views**: Clean, interactive Data Table on Desktop (`>768px`) and dynamic Card Grid on Mobile (`<768px`).
+
+### 3. 📄 Pagination
+- Server-side pagination using DummyJSON `limit` and `skip` (`skip = (page - 1) * limit`).
+- Custom controls: Page numbers with ellipsis, Previous/Next buttons, page size selector (`10`, `20`, `50`).
+- Status indicator: e.g. `"Showing 21–40 of 194 products"`.
+
+### 4. 🔍 Debounced Search & Race Condition Prevention
+- Searches products using `/products/search?q=`.
+- Custom `useDebounce` hook (400ms delay) waits until typing stops before querying the API.
+- **Race Condition Safeguard**: Uses Axios `AbortController` cancellation signals so fast typing and slow responses (`&delay=2000`) never overwrite newer results.
+- Resets automatically to Page 1 on query changes.
+
+### 5. 🏷️ Category Filter & Sorting
+- Category dropdown populated dynamically via `GET /products/categories`.
+- Sort by `price`, `rating`, or `title` with toggleable `Ascending` / `Descending` order.
+
+### 6. 📱 Product Details (`/products/[id]`)
+- Dynamic route displaying image gallery with thumbnail picker, pricing, discount badge, full description, specifications (SKU, weight, warranty, shipping), and verified customer reviews.
+- Custom **404 Not Found** view for non-existent product IDs.
+
+### 7. ✏️ Add, Edit & Delete Operations
+- **Form Validation**: Validates title, category, price (>0), stock (>=0), and rating (0–5).
+- **Delete Confirmation Modal**: Prompts user before deleting.
+- **Rapid Submission Safeguard**: Action buttons disabled during pending async operations.
+
+### 8. 🎨 UI States
+- **Loading State**: Animated Skeleton UI for tables and cards.
+- **Empty State**: Friendly banner when 0 products match search/filter.
+- **Error State**: Error banner with a functional **Retry** button.
+
+---
+
+## 🛠️ Setup & Local Installation
+
+### Prerequisites
+- Node.js v18.x or higher
+- npm or pnpm
+
+### Steps
 ```bash
+# 1. Clone the repository
+git clone https://github.com/your-username/product-admin-dashboard.git
+cd product-admin-dashboard
+
+# 2. Install dependencies
+npm install
+
+# 3. Start development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# 4. Open http://localhost:3000 in your browser
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 💡 Technical Design Choices & Explanations
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 1. Shared Axios Setup (`src/api/axios.ts`)
+- Configured a single custom Axios instance with request and response interceptors.
+- **Request Interceptor**: Automatically attaches `Authorization: Bearer <token>` to headers if a session token is active.
+- **Response Interceptor**: Centralizes error handling and automatically redirects `401 Unauthorized` responses to `/login?expired=true`.
 
-## Learn More
+### 2. Solution to API Limitation: Search vs. Category Filter
+- **Limitation**: The DummyJSON API does not natively support combining search (`/products/search?q=`) and category filtering (`/products/category/{cat}`) in a single request.
+- **Our Approach**: When both a search term (`q`) and category filter are active, the app queries `/products/search?q=` and applies client-side category filtering on the returned result set. A small indicator badge alerts the user that hybrid filtering is active.
 
-To learn more about Next.js, take a look at the following resources:
+### 3. Solution to Simulated CRUD Backend Operations
+- **Limitation**: DummyJSON returns mock JSON responses for `POST`, `PUT`, and `DELETE` requests without modifying its real database.
+- **Our Approach**: We implemented a client-side state overlay (`ProductContext`) backed by `localStorage`. Newly created, edited, or deleted items are merged into API responses in real-time and persist across browser reloads.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 4. URL State Synchronization & Robust Parameter Sanitization
+- All dashboard filters (`page`, `limit`, `q`, `category`, `sortBy`, `order`) are bi-directionally synced with URL search parameters.
+- Malformed parameters (e.g. `?page=abc` or `?limit=-99`) are defensively sanitized to default fallback values (`page=1`, `limit=10`) using `urlParams.ts`, preventing app crashes.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 🐛 Problem Faced & Fix
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Problem: Race Conditions on Fast Typing
+When a user typed quickly in the search input over a slow or delayed network (`&delay=2000`), earlier API requests could resolve after later requests, causing old search results to overwrite current results.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Solution:
+We implemented Axios `AbortController` in the custom `useProducts` hook. Whenever a new search term or filter parameter is triggered, any pending HTTP request is immediately aborted before dispatching the new request. Abort errors are caught and ignored cleanly.
+
+---
+
+## 🤖 AI Tool Assistance Note
+AI tools were utilized during development for:
+1. Drafting the technical implementation plan and mapping out assignment edge cases.
+2. Structuring defensive TypeScript interface definitions.
+3. Formulating modern Tailwind CSS aesthetic color palettes and glassmorphism styling patterns.
+
+---
+
+## 💻 Tech Stack
+- **Framework**: Next.js 16 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS v4
+- **HTTP Client**: Axios
+- **State & Cookies**: React Context, `js-cookie`
