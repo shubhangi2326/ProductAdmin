@@ -56,6 +56,7 @@ export default function Header() {
                     fill
                     sizes="32px"
                     className="object-cover"
+                    unoptimized
                   />
                 ) : (
                   <span className="text-xs font-bold text-indigo-300">
