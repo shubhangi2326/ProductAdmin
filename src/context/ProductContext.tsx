@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Product } from '@/types/product';
+import { Product, ProductQueryParams } from '@/types/product';
 
 const LOCAL_MUTATIONS_KEY = 'admin_product_mutations_v1';
 
@@ -9,6 +9,15 @@ interface LocalMutations {
   added: Product[];
   edited: Record<number, Partial<Product>>;
   deleted: number[];
+}
+
+export interface ApplyLocalMutationsOptions {
+  category?: string;
+  q?: string;
+  sortBy?: string;
+  order?: 'asc' | 'desc';
+  page?: number;
+  limit?: number;
 }
 
 interface ProductContextType {
@@ -21,7 +30,8 @@ interface ProductContextType {
   getOverriddenProduct: (product: Product) => Product;
   applyLocalMutations: (
     fetchedProducts: Product[],
-    apiTotal: number
+    apiTotal: number,
+    options?: ApplyLocalMutationsOptions
   ) => { products: Product[]; total: number };
   resetMutations: () => void;
 }
@@ -112,27 +122,99 @@ export const ProductProvider = ({ children }: { children: ReactNode }) => {
 
   const applyLocalMutations = (
     fetchedProducts: Product[],
-    apiTotal: number
+    apiTotal: number,
+    options?: ApplyLocalMutationsOptions
   ): { products: Product[]; total: number } => {
-    // 1. Filter out deleted products from fetched products
-    const nonDeleted = fetchedProducts.filter((p) => !mutations.deleted.includes(p.id));
+    const category =
+      options?.category && options.category !== 'all'
+        ? options.category.trim().toLowerCase()
+        : '';
+    const q = options?.q ? options.q.trim().toLowerCase() : '';
+    const sortBy = options?.sortBy || '';
+    const order = options?.order || 'asc';
+    const page = options?.page || 1;
+    const limit = options?.limit || 10;
 
-    // 2. Apply edits to existing products
-    const editedMerged = nonDeleted.map((p) => {
-      if (mutations.edited[p.id]) {
-        return { ...p, ...mutations.edited[p.id] };
+    // 1. Filter locally added products by active category & search query
+    const matchingAdded = mutations.added.filter((p) => {
+      // Exclude if deleted
+      if (mutations.deleted.includes(p.id)) return false;
+
+      // Category filter check (case-insensitive)
+      if (category && p.category.trim().toLowerCase() !== category) {
+        return false;
       }
-      return p;
+
+      // Search query check (title, description, brand, category)
+      if (q) {
+        const titleMatch = p.title.toLowerCase().includes(q);
+        const descMatch = p.description.toLowerCase().includes(q);
+        const brandMatch = p.brand ? p.brand.toLowerCase().includes(q) : false;
+        const catMatch = p.category.toLowerCase().includes(q);
+        if (!titleMatch && !descMatch && !brandMatch && !catMatch) {
+          return false;
+        }
+      }
+
+      return true;
     });
 
-    // 3. For added products: filter out any that might be in deleted list
-    const validAdded = mutations.added.filter((p) => !mutations.deleted.includes(p.id));
+    // 2. Filter API products: exclude deleted items & apply local edits
+    const nonDeletedApi = fetchedProducts.filter((p) => !mutations.deleted.includes(p.id));
 
-    // Total count adjusted for added items and deleted items
-    const adjustedTotal = Math.max(0, apiTotal + validAdded.length - mutations.deleted.length);
+    const editedApi = nonDeletedApi
+      .map((p) => {
+        if (mutations.edited[p.id]) {
+          return { ...p, ...mutations.edited[p.id] };
+        }
+        return p;
+      })
+      .filter((p) => {
+        // If an edited product's category was modified locally, verify match
+        if (category && p.category.trim().toLowerCase() !== category) {
+          return false;
+        }
+        return true;
+      });
+
+    // Count API products that were deleted
+    const deletedApiCount = mutations.deleted.filter(
+      (id) => !mutations.added.some((ap) => ap.id === id)
+    ).length;
+
+    // Calculate total count accurately
+    const adjustedTotal = Math.max(0, apiTotal + matchingAdded.length - deletedApiCount);
+
+    // Combine local added products and API products
+    // On Page 1 (or when sorting), prepend local added products
+    let combined: Product[] = [];
+    if (page === 1 || sortBy) {
+      combined = [...matchingAdded, ...editedApi];
+    } else {
+      combined = [...editedApi];
+    }
+
+    // Apply sorting if a sort field is specified
+    if (sortBy) {
+      combined.sort((a, b) => {
+        const valA = (a as unknown as Record<string, unknown>)[sortBy];
+        const valB = (b as unknown as Record<string, unknown>)[sortBy];
+
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          return order === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+        if (typeof valA === 'number' && typeof valB === 'number') {
+          return order === 'asc' ? valA - valB : valB - valA;
+        }
+        return 0;
+      });
+    }
+
+    // Slice for current page limit
+    const paginatedProducts = combined.slice(0, limit);
 
     return {
-      products: editedMerged,
+      products: paginatedProducts,
       total: adjustedTotal,
     };
   };

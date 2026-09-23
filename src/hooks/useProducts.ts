@@ -73,7 +73,8 @@ export function useProducts() {
       // Apply in-memory local mutations (Add/Edit/Delete) overlay
       const { products: mergedList, total: adjustedTotal } = applyLocalMutations(
         fetchedList,
-        fetchedTotal
+        fetchedTotal,
+        queryParams
       );
 
       setProducts(mergedList);
