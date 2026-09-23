@@ -40,9 +40,21 @@ api.interceptors.response.use(
   (response) => {
     return response;
   },
-  (error: AxiosError<{ message?: string }>) => {
+  (error) => {
+    // If request was intentionally canceled (via AbortController or CancelToken), pass through original cancel error
+    if (
+      axios.isCancel(error) ||
+      error?.name === 'CanceledError' ||
+      error?.name === 'AbortError' ||
+      error?.message === 'canceled'
+    ) {
+      return Promise.reject(error);
+    }
+
+    const axiosErr = error as AxiosError<{ message?: string }>;
+
     // Handle 401 Unauthorized (Expired or invalid token)
-    if (error.response?.status === 401) {
+    if (axiosErr.response?.status === 401) {
       if (typeof window !== 'undefined') {
         Cookies.remove(AUTH_TOKEN_KEY);
         localStorage.removeItem(AUTH_TOKEN_KEY);
@@ -55,10 +67,10 @@ api.interceptors.response.use(
       }
     }
 
-    // Extract human-readable error message
+    // Extract human-readable error message for genuine network errors
     const customErrorMessage =
-      error.response?.data?.message ||
-      error.message ||
+      axiosErr.response?.data?.message ||
+      axiosErr.message ||
       'An unexpected network error occurred. Please try again.';
 
     return Promise.reject(new Error(customErrorMessage));

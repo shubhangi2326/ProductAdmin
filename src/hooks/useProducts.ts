@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import axios from 'axios';
 import { fetchProducts, fetchProductCategories } from '@/api/products';
 import { Product, CategoryItem, ProductQueryParams } from '@/types/product';
 import { parseQueryParams, buildQueryString } from '@/utils/urlParams';
@@ -80,8 +81,14 @@ export function useProducts() {
       setProducts(mergedList);
       setTotal(adjustedTotal);
     } catch (err: unknown) {
-      // Ignore abort errors caused by intentional cancellation
-      if (err instanceof Error && (err.name === 'CanceledError' || err.name === 'AbortError')) {
+      // Ignore abort/cancellation errors caused by intentional request cancellation
+      if (
+        axios.isCancel(err) ||
+        (err instanceof Error &&
+          (err.name === 'CanceledError' ||
+            err.name === 'AbortError' ||
+            err.message === 'canceled'))
+      ) {
         return;
       }
       const msg =
@@ -90,7 +97,10 @@ export function useProducts() {
           : 'Failed to load products. Please check your connection.';
       setError(msg);
     } finally {
-      setIsLoading(false);
+      // Only turn off loading state if this controller wasn't aborted by a newer request
+      if (abortControllerRef.current === controller) {
+        setIsLoading(false);
+      }
     }
   }, [
     queryParams.page,
@@ -102,7 +112,7 @@ export function useProducts() {
     applyLocalMutations,
   ]);
 
-  // Execute fetch when query params change
+  // Execute fetch when query params change or local mutations trigger re-render
   useEffect(() => {
     loadProducts();
 
